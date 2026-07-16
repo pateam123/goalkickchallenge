@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Goal Kick Ice Breaker ⚽</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import {
+    getFirestore, collection, addDoc, onSnapshot, query,
+    orderBy, getDocs, deleteDoc, doc, limit
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  window.FB = { initializeApp, getFirestore, collection, addDoc, onSnapshot,
+                query, orderBy, getDocs, deleteDoc, doc, limit };
+  window.dispatchEvent(new Event("fb-ready"));
+</script>
 <style>
   :root{
     --night:#0B1E2D;      /* stadium night sky */
@@ -213,7 +223,7 @@
   </div>
 
   <div id="flyball">⚽</div>
-  <div class="storage-warn hidden" id="storageWarn">Shared sync unavailable here — running in local demo mode (use Test kick).</div>
+  <div class="storage-warn hidden" id="storageWarn">Live sync unavailable — check Firebase config and internet connection.</div>
 </div>
 
 <!-- result overlay -->
@@ -268,8 +278,18 @@ const QUESTIONS = [
   "Most-used app on your phone — be honest!"
 ];
 const ZONE_NAMES = ["Top Left","Top Centre","Top Right","Bottom Left","Bottom Centre","Bottom Right"];
-const POLL_MS = 2500;
-const KEY_PREFIX = "gk-kick:";
+
+/* ---- Firebase config ---- */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDrH4R6WkNng3eiasnPEW-U47uKZf4bF78",
+  authDomain: "goal-kick-727f5.firebaseapp.com",
+  projectId: "goal-kick-727f5",
+  storageBucket: "goal-kick-727f5.firebasestorage.app",
+  messagingSenderId: "820678443010",
+  appId: "1:820678443010:web:748dc2d1b29c0306c8671b"
+};
+/* Room code: add ?room=agentthon to the URL for a fresh game. Defaults to "main". */
+const ROOM = new URLSearchParams(location.search).get("room") || "main";
 
 /* ================= MODE ================= */
 const isPlayer = location.hash.includes("player");
@@ -289,12 +309,26 @@ pill.addEventListener("click", () => {
 });
 setMode(isPlayer);
 
-/* ================= STORAGE HELPERS ================= */
-const hasStorage = typeof window.storage !== "undefined";
-async function safeSet(k,v){ try{ return await window.storage.set(k, v, true); }catch(e){ return null; } }
-async function safeList(prefix){ try{ return await window.storage.list(prefix, true); }catch(e){ return null; } }
-async function safeGet(k){ try{ return await window.storage.get(k, true); }catch(e){ return null; } }
-async function safeDel(k){ try{ return await window.storage.delete(k, true); }catch(e){ return null; } }
+/* ================= FIRESTORE ================= */
+let db = null, kicksRef = null, fbReady = false;
+const fbWaiters = [];
+
+function initFirebase(){
+  try {
+    const app = FB.initializeApp(FIREBASE_CONFIG);
+    db = FB.getFirestore(app);
+    kicksRef = FB.collection(db, "rooms", ROOM, "kicks");
+    fbReady = true;
+    fbWaiters.splice(0).forEach(fn => fn());
+  } catch (e) {
+    console.error("Firebase init failed:", e);
+    $("storageWarn").classList.remove("hidden");
+  }
+}
+function whenFB(fn){ fbReady ? fn() : fbWaiters.push(fn); }
+
+if (window.FB) initFirebase();
+else window.addEventListener("fb-ready", initFirebase, { once: true });
 
 /* ================= PROJECTOR LOGIC ================= */
 const goalGrid = $("goalGrid");
@@ -382,10 +416,13 @@ $("btnClear").addEventListener("click", async ()=>{
   kickTotal = 0; $("kickCount").textContent = "0";
   feed.innerHTML = '<div class="feed-empty">No kicks yet — waiting for players…</div>';
   processed.clear(); animQueue = [];
-  if (hasStorage){
-    const res = await safeList(KEY_PREFIX);
-    if (res && res.keys) for (const k of res.keys) await safeDel(k);
-  }
+  whenFB(async () => {
+    try {
+      const snap = await FB.getDocs(kicksRef);
+      await Promise.all(snap.docs.map(d => FB.deleteDoc(FB.doc(db, "rooms", ROOM, "kicks", d.id))));
+      primed = true;
+    } catch (e) { console.error("Reset failed:", e); }
+  });
 });
 
 /* QR code */
@@ -402,35 +439,34 @@ $("urlGo").addEventListener("click", ()=>{
 $("urlInput").value = location.href.split("#")[0];
 makeQR(location.href.split("#")[0]);
 
-/* polling for kicks */
-async function poll(){
-  if (!hasStorage) return;
-  const res = await safeList(KEY_PREFIX);
-  if (res && res.keys){
-    const fresh = res.keys.filter(k => !processed.has(k)).sort();
-    for (const k of fresh){
-      processed.add(k);
-      const rec = await safeGet(k);
-      if (rec && rec.value){
-        try{
-          const d = JSON.parse(rec.value);
-          if (typeof d.zone === "number" && d.name) queueKick(String(d.name).slice(0,18), Math.min(5, Math.max(0, d.zone)));
-        }catch(e){}
+/* ================= REALTIME LISTENER ================= */
+let primed = false;
+
+function startListener(){
+  const q = FB.query(kicksRef, FB.orderBy("ts", "asc"), FB.limit(200));
+  FB.onSnapshot(q, (snap) => {
+    snap.docChanges().forEach((chg) => {
+      if (chg.type !== "added") return;
+      const id = chg.doc.id;
+      if (processed.has(id)) return;
+      processed.add(id);
+
+      // On first load, absorb history without replaying animations.
+      if (!primed) return;
+
+      const d = chg.doc.data();
+      if (typeof d.zone === "number" && d.name){
+        queueKick(String(d.name).slice(0,18), Math.min(5, Math.max(0, d.zone)));
       }
-    }
-  }
-}
-if (!isPlayer){
-  if (hasStorage){
-    // mark existing kicks as processed so old ones don't replay on load
-    safeList(KEY_PREFIX).then(res => {
-      if (res && res.keys) res.keys.forEach(k => processed.add(k));
-      setInterval(poll, POLL_MS);
     });
-  } else {
+    primed = true;
+  }, (err) => {
+    console.error("Listener error:", err);
     $("storageWarn").classList.remove("hidden");
-  }
+  });
 }
+
+if (!isPlayer) whenFB(startListener);
 
 /* ================= PLAYER LOGIC ================= */
 const miniGoal = $("miniGoal");
@@ -448,7 +484,7 @@ $("nameGo").addEventListener("click", ()=>{
   myName = v;
   $("nameCard").style.display = "none";
   $("shootArea").style.display = "flex";
-  if (!hasStorage) $("plStorageNote").textContent = "Note: live sync isn't available in this view — kicks may not reach the big screen.";
+  if (!fbReady) $("plStorageNote").textContent = "Connecting…";
 });
 $("nameInput").addEventListener("keydown", e => { if (e.key === "Enter") $("nameGo").click(); });
 
@@ -502,10 +538,13 @@ async function shoot(zone){
   ball.style.transform = "translateX(-50%) translateY(-45vh) scale(.4) rotate(540deg)";
   ball.style.opacity = "0";
 
-  if (hasStorage){
-    const key = KEY_PREFIX + Date.now() + "_" + Math.random().toString(36).slice(2,7);
-    await safeSet(key, JSON.stringify({name: myName, zone, ts: Date.now()}));
+  try {
+    await FB.addDoc(kicksRef, { name: myName, zone, ts: Date.now() });
+  } catch (e) {
+    console.error("Kick failed to send:", e);
+    $("plStorageNote").textContent = "Couldn't reach the screen — check your connection.";
   }
+
   setTimeout(()=>{
     $("shootArea").style.display = "none";
     $("plResult").style.display = "flex";
