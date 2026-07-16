@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Goal Kick Ice Breaker ⚽</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root{
+    --night:#0B1E2D;      /* stadium night sky */
+    --pitch:#1E7A3C;      /* grass */
+    --pitch-lite:#2EA152;
+    --line:#FDFDF6;       /* floodlight white */
+    --gold:#F5B32F;       /* trophy gold */
+    --red:#E64545;        /* goal flash */
+    --ink:#08141E;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    font-family:Arial, Helvetica, sans-serif;
+    background:var(--night);
+    color:var(--line);
+    overflow:hidden;
+  }
+  .hidden{display:none!important}
+
+  /* ---------- shared bits ---------- */
+  .eyebrow{font-size:11px;letter-spacing:4px;color:var(--gold);font-weight:bold;text-transform:uppercase}
+  .display{font-family:"Arial Black", Arial, sans-serif;text-transform:uppercase;letter-spacing:1px}
+  button{font-family:inherit;cursor:pointer;border:none}
+
+  /* ---------- PROJECTOR ---------- */
+  #projector{height:100%;display:flex;flex-direction:column;padding:2vh 2vw;position:relative}
+  .pj-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1.2vh}
+  .pj-title{font-size:min(4.2vw,44px)}
+  .pj-title .ball{display:inline-block}
+  .scoreline{font-size:13px;color:#9FB4C4;letter-spacing:2px;text-transform:uppercase}
+  .scoreline b{color:var(--gold)}
+
+  .pj-main{flex:1;display:flex;gap:2vw;min-height:0}
+
+  /* goal area */
+  .goal-wrap{flex:1;display:flex;flex-direction:column;min-width:0}
+  .goal{
+    position:relative;flex:1;
+    border:6px solid var(--line);border-bottom:none;border-radius:6px 6px 0 0;
+    background:
+      repeating-linear-gradient(0deg, rgba(253,253,246,.14) 0 1px, transparent 1px 26px),
+      repeating-linear-gradient(90deg, rgba(253,253,246,.14) 0 1px, transparent 1px 26px),
+      linear-gradient(180deg, rgba(11,30,45,.35), rgba(11,30,45,.65));
+    display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);
+    overflow:hidden;
+  }
+  .zone{
+    border:2px dashed rgba(245,179,47,.45);
+    display:flex;flex-direction:column;justify-content:center;align-items:center;
+    text-align:center;padding:1.5vh 1vw;gap:.8vh;position:relative;
+    transition:background .3s;
+  }
+  .zone .z-num{font-size:11px;letter-spacing:3px;color:var(--gold);font-weight:bold}
+  .zone .z-q{font-size:min(1.5vw,19px);font-weight:bold;line-height:1.3;max-width:95%}
+  .zone.lit{background:rgba(245,179,47,.28)}
+  .zone.hit{animation:netshake .5s ease}
+  @keyframes netshake{
+    0%,100%{transform:translate(0,0)}
+    25%{transform:translate(-4px,3px)}
+    50%{transform:translate(4px,-3px)}
+    75%{transform:translate(-3px,2px)}
+  }
+
+  .pitch-strip{
+    height:9vh;border-radius:0 0 8px 8px;
+    background:repeating-linear-gradient(90deg, var(--pitch) 0 60px, var(--pitch-lite) 60px 120px);
+    position:relative;border-top:4px solid var(--line);
+  }
+  .penalty-dot{position:absolute;left:50%;top:55%;width:10px;height:10px;background:var(--line);border-radius:50%;transform:translate(-50%,-50%)}
+
+  /* flying ball */
+  #flyball{
+    position:absolute;font-size:min(4vw,46px);z-index:30;left:0;top:0;
+    filter:drop-shadow(0 6px 6px rgba(0,0,0,.45));
+    transition:transform 1s cubic-bezier(.2,.7,.3,1), opacity .3s;
+    transform:translate(-50%,-50%);opacity:0;pointer-events:none;
+  }
+  #flyball.spin{animation:spin .8s linear}
+  @keyframes spin{from{rotate:0deg}to{rotate:720deg}}
+
+  /* side panel */
+  .side{width:min(24vw,300px);display:flex;flex-direction:column;gap:1.5vh}
+  .card{background:rgba(253,253,246,.06);border:1px solid rgba(253,253,246,.15);border-radius:12px;padding:1.6vh 1.2vw}
+  .card h3{font-size:12px;letter-spacing:3px;color:var(--gold);text-transform:uppercase;margin-bottom:1vh}
+  #qrbox{background:#fff;padding:10px;border-radius:8px;width:fit-content;margin:0 auto}
+  #qrbox img, #qrbox canvas{display:block}
+  .qr-hint{font-size:12px;color:#9FB4C4;text-align:center;margin-top:1vh;line-height:1.4}
+  .url-row{display:flex;gap:6px;margin-top:1vh}
+  .url-row input{flex:1;background:var(--ink);border:1px solid rgba(253,253,246,.2);color:var(--line);border-radius:6px;padding:6px 8px;font-size:11px}
+  .url-row button{background:var(--gold);color:var(--ink);font-weight:bold;border-radius:6px;padding:6px 10px;font-size:11px}
+
+  #feed{flex:1;overflow:auto;display:flex;flex-direction:column;gap:.8vh;min-height:8vh}
+  .feed-item{font-size:13px;background:rgba(253,253,246,.05);border-left:3px solid var(--gold);border-radius:4px;padding:6px 8px;line-height:1.35}
+  .feed-item b{color:var(--gold)}
+  .feed-empty{font-size:12px;color:#9FB4C4;font-style:italic}
+
+  .pj-actions{display:flex;gap:8px}
+  .pj-actions button{flex:1;border-radius:8px;padding:1.2vh 0;font-weight:bold;font-size:12px;letter-spacing:1px;text-transform:uppercase}
+  #btnTest{background:var(--gold);color:var(--ink)}
+  #btnClear{background:transparent;color:#9FB4C4;border:1px solid rgba(253,253,246,.25)}
+
+  /* result overlay */
+  #overlay{
+    position:fixed;inset:0;background:rgba(8,20,30,.88);z-index:50;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.5vh;
+    text-align:center;padding:4vw;
+  }
+  #ovGoal{font-size:min(9vw,110px);color:var(--gold);text-shadow:0 0 40px rgba(245,179,47,.5)}
+  #ovWho{font-size:min(3vw,30px)}
+  #ovWho b{color:var(--gold)}
+  #ovQ{font-size:min(4.5vw,52px);font-weight:bold;max-width:80vw;line-height:1.25;font-family:"Arial Black",Arial,sans-serif}
+  #ovHint{font-size:14px;color:#9FB4C4;letter-spacing:2px;text-transform:uppercase}
+  #overlay button{background:var(--gold);color:var(--ink);font-weight:bold;border-radius:999px;padding:12px 34px;font-size:15px;letter-spacing:1px}
+
+  .storage-warn{position:absolute;bottom:1vh;left:2vw;font-size:11px;color:var(--red)}
+
+  /* ---------- PLAYER (phone) ---------- */
+  #player{height:100%;display:flex;flex-direction:column;padding:20px;gap:14px}
+  .pl-head{text-align:center}
+  .pl-head .display{font-size:26px}
+  .pl-sub{font-size:12px;color:#9FB4C4;margin-top:4px}
+
+  #nameCard{display:flex;flex-direction:column;gap:12px;background:rgba(253,253,246,.06);border:1px solid rgba(253,253,246,.15);border-radius:14px;padding:20px}
+  #nameCard label{font-size:12px;letter-spacing:2px;color:var(--gold);text-transform:uppercase;font-weight:bold}
+  #nameInput{background:var(--ink);border:2px solid rgba(253,253,246,.25);color:var(--line);border-radius:10px;padding:14px;font-size:18px;text-align:center}
+  #nameGo{background:var(--gold);color:var(--ink);font-weight:bold;border-radius:10px;padding:14px;font-size:16px;letter-spacing:1px;text-transform:uppercase}
+
+  #shootArea{flex:1;display:none;flex-direction:column;min-height:0}
+  #miniGoal{
+    border:4px solid var(--line);border-bottom:none;border-radius:6px 6px 0 0;
+    display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);
+    height:34vh;
+    background:
+      repeating-linear-gradient(0deg, rgba(253,253,246,.12) 0 1px, transparent 1px 18px),
+      repeating-linear-gradient(90deg, rgba(253,253,246,.12) 0 1px, transparent 1px 18px);
+  }
+  .mini-zone{border:1px dashed rgba(245,179,47,.4);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--gold);font-weight:bold}
+  .mini-zone.aim{background:rgba(245,179,47,.35);color:var(--line)}
+  #pitchPhone{
+    flex:1;position:relative;border-radius:0 0 12px 12px;min-height:26vh;
+    background:repeating-linear-gradient(90deg, var(--pitch) 0 40px, var(--pitch-lite) 40px 80px);
+    border-top:3px solid var(--line);touch-action:none;overflow:hidden;
+  }
+  #theBall{
+    position:absolute;left:50%;bottom:14%;transform:translateX(-50%);
+    font-size:56px;user-select:none;filter:drop-shadow(0 8px 8px rgba(0,0,0,.4));
+    transition:transform .12s;
+  }
+  .swipe-hint{position:absolute;left:0;right:0;bottom:2%;text-align:center;font-size:12px;color:rgba(253,253,246,.85);letter-spacing:2px;text-transform:uppercase;pointer-events:none}
+  #plResult{display:none;flex-direction:column;gap:14px;align-items:center;text-align:center;padding:20px;background:rgba(253,253,246,.06);border:1px solid rgba(245,179,47,.4);border-radius:14px}
+  #plResult .rq{font-size:20px;font-weight:bold;line-height:1.3}
+  #plResult .rz{font-size:12px;letter-spacing:3px;color:var(--gold);text-transform:uppercase;font-weight:bold}
+  #plAgain{background:var(--gold);color:var(--ink);font-weight:bold;border-radius:10px;padding:12px 28px;font-size:14px;letter-spacing:1px;text-transform:uppercase}
+  .pl-note{font-size:11px;color:#9FB4C4;text-align:center;line-height:1.4}
+
+  /* mode switch pill (small, corner) */
+  #modePill{position:fixed;top:8px;right:8px;z-index:60;background:rgba(253,253,246,.08);border:1px solid rgba(253,253,246,.2);color:#9FB4C4;font-size:10px;border-radius:999px;padding:5px 10px;letter-spacing:1px}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<button id="modePill">SWITCH TO PLAYER MODE</button>
+
+<!-- ================= PROJECTOR ================= -->
+<div id="projector">
+  <div class="pj-head">
+    <div>
+      <div class="eyebrow">World Cup Ice Breaker</div>
+      <div class="display pj-title"><span class="ball">⚽</span> Goal Kick Challenge</div>
+    </div>
+    <div class="scoreline">Kicks taken: <b id="kickCount">0</b></div>
+  </div>
+
+  <div class="pj-main">
+    <div class="goal-wrap">
+      <div class="goal" id="goalGrid"></div>
+      <div class="pitch-strip"><div class="penalty-dot"></div></div>
+    </div>
+
+    <div class="side">
+      <div class="card">
+        <h3>Scan to shoot</h3>
+        <div id="qrbox"></div>
+        <div class="qr-hint">Scan with your phone camera,<br>then tap <b>Switch to player mode</b></div>
+        <div class="url-row">
+          <input id="urlInput" placeholder="Paste this app's shared link…">
+          <button id="urlGo">Make QR</button>
+        </div>
+      </div>
+
+      <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0">
+        <h3>Latest kicks</h3>
+        <div id="feed"><div class="feed-empty">No kicks yet — waiting for players…</div></div>
+      </div>
+
+      <div class="pj-actions">
+        <button id="btnTest">⚽ Test kick</button>
+        <button id="btnClear">Reset game</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="flyball">⚽</div>
+  <div class="storage-warn hidden" id="storageWarn">Shared sync unavailable here — running in local demo mode (use Test kick).</div>
+</div>
+
+<!-- result overlay -->
+<div id="overlay" class="hidden">
+  <div id="ovGoal" class="display">GOOOAL!</div>
+  <div id="ovWho"><b id="ovName">Player</b> hit <span id="ovZone">Zone 1</span></div>
+  <div id="ovQ">Question appears here</div>
+  <div id="ovHint">Answer out loud for the room!</div>
+  <button id="ovClose">Next kick ▸</button>
+</div>
+
+<!-- ================= PLAYER ================= -->
+<div id="player" class="hidden">
+  <div class="pl-head">
+    <div class="eyebrow">World Cup Ice Breaker</div>
+    <div class="display">Take your shot ⚽</div>
+    <div class="pl-sub">Your kick will appear on the big screen</div>
+  </div>
+
+  <div id="nameCard">
+    <label for="nameInput">Your name</label>
+    <input id="nameInput" maxlength="18" placeholder="e.g. Aisyah" autocomplete="off">
+    <button id="nameGo">Step up to the spot ▸</button>
+  </div>
+
+  <div id="shootArea">
+    <div id="miniGoal"></div>
+    <div id="pitchPhone">
+      <div id="theBall">⚽</div>
+      <div class="swipe-hint">Swipe the ball toward the goal</div>
+    </div>
+  </div>
+
+  <div id="plResult">
+    <div class="rz" id="plZone">ZONE 3</div>
+    <div class="rq" id="plQ">Question</div>
+    <div class="pl-note">Look at the big screen and answer out loud! 🎤</div>
+    <button id="plAgain">Kick again</button>
+  </div>
+
+  <div class="pl-note" id="plStorageNote"></div>
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+const QUESTIONS = [
+  "What's your favourite movie of all time?",
+  "Describe your dream vacation ✈️",
+  "What's one hidden talent you have?",
+  "What food could you eat every day?",
+  "What's #1 on your bucket list?",
+  "Most-used app on your phone — be honest!"
+];
+const ZONE_NAMES = ["Top Left","Top Centre","Top Right","Bottom Left","Bottom Centre","Bottom Right"];
+const POLL_MS = 2500;
+const KEY_PREFIX = "gk-kick:";
+
+/* ================= MODE ================= */
+const isPlayer = location.hash.includes("player");
+const $ = (id) => document.getElementById(id);
+const projector = $("projector"), player = $("player"), pill = $("modePill");
+
+function setMode(playerMode){
+  projector.classList.toggle("hidden", playerMode);
+  player.classList.toggle("hidden", !playerMode);
+  pill.textContent = playerMode ? "SWITCH TO SCREEN MODE" : "SWITCH TO PLAYER MODE";
+  document.body.style.overflow = "hidden";
+}
+pill.addEventListener("click", () => {
+  const nowPlayer = projector.classList.contains("hidden");
+  location.hash = nowPlayer ? "" : "player";
+  setMode(!nowPlayer);
+});
+setMode(isPlayer);
+
+/* ================= STORAGE HELPERS ================= */
+const hasStorage = typeof window.storage !== "undefined";
+async function safeSet(k,v){ try{ return await window.storage.set(k, v, true); }catch(e){ return null; } }
+async function safeList(prefix){ try{ return await window.storage.list(prefix, true); }catch(e){ return null; } }
+async function safeGet(k){ try{ return await window.storage.get(k, true); }catch(e){ return null; } }
+async function safeDel(k){ try{ return await window.storage.delete(k, true); }catch(e){ return null; } }
+
+/* ================= PROJECTOR LOGIC ================= */
+const goalGrid = $("goalGrid");
+QUESTIONS.forEach((q,i)=>{
+  const z = document.createElement("div");
+  z.className = "zone"; z.id = "zone"+i;
+  z.innerHTML = `<div class="z-num">ZONE ${i+1} · ${ZONE_NAMES[i].toUpperCase()}</div><div class="z-q">${q}</div>`;
+  goalGrid.appendChild(z);
+});
+
+let kickTotal = 0, processed = new Set(), animQueue = [], animating = false;
+const feed = $("feed");
+
+function addFeed(name, zone){
+  if (feed.querySelector(".feed-empty")) feed.innerHTML = "";
+  const d = document.createElement("div");
+  d.className = "feed-item";
+  d.innerHTML = `<b>${escapeHtml(name)}</b> → Zone ${zone+1} (${ZONE_NAMES[zone]})`;
+  feed.prepend(d);
+  while (feed.children.length > 12) feed.removeChild(feed.lastChild);
+}
+function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function queueKick(name, zone){
+  animQueue.push({name, zone});
+  if (!animating) nextAnim();
+}
+function nextAnim(){
+  const item = animQueue.shift();
+  if (!item){ animating = false; return; }
+  animating = true;
+  animateKick(item.name, item.zone);
+}
+
+const flyball = $("flyball"), overlay = $("overlay");
+function animateKick(name, zone){
+  const zEl = $("zone"+zone);
+  const goalR = projector.getBoundingClientRect();
+  const zR = zEl.getBoundingClientRect();
+  const dot = document.querySelector(".penalty-dot").getBoundingClientRect();
+
+  // start at penalty dot
+  flyball.style.transition = "none";
+  flyball.style.transform = `translate(${dot.left + dot.width/2 - goalR.left}px, ${dot.top - goalR.top}px) translate(-50%,-50%) scale(1.4)`;
+  flyball.style.opacity = "1";
+  flyball.classList.remove("spin");
+  void flyball.offsetWidth; // reflow
+
+  const tx = zR.left + zR.width/2 - goalR.left;
+  const ty = zR.top + zR.height/2 - goalR.top;
+  flyball.style.transition = "transform 1s cubic-bezier(.2,.7,.3,1), opacity .3s";
+  flyball.classList.add("spin");
+  flyball.style.transform = `translate(${tx}px, ${ty}px) translate(-50%,-50%) scale(.75)`;
+
+  setTimeout(()=>{
+    zEl.classList.add("hit","lit");
+    kickTotal++; $("kickCount").textContent = kickTotal;
+    addFeed(name, zone);
+    setTimeout(()=>{
+      flyball.style.opacity = "0";
+      showOverlay(name, zone);
+      setTimeout(()=> zEl.classList.remove("hit","lit"), 1200);
+    }, 350);
+  }, 1000);
+}
+
+function showOverlay(name, zone){
+  $("ovName").textContent = name;
+  $("ovZone").textContent = `Zone ${zone+1} · ${ZONE_NAMES[zone]}`;
+  $("ovQ").textContent = QUESTIONS[zone];
+  overlay.classList.remove("hidden");
+}
+$("ovClose").addEventListener("click", ()=>{
+  overlay.classList.add("hidden");
+  nextAnim();
+});
+
+$("btnTest").addEventListener("click", ()=>{
+  const names = ["Coach","Star Striker","Mystery Player","Golden Boot"];
+  queueKick(names[Math.floor(Math.random()*names.length)], Math.floor(Math.random()*6));
+});
+
+$("btnClear").addEventListener("click", async ()=>{
+  if (!confirm("Reset the game? This clears all kicks for everyone.")) return;
+  kickTotal = 0; $("kickCount").textContent = "0";
+  feed.innerHTML = '<div class="feed-empty">No kicks yet — waiting for players…</div>';
+  processed.clear(); animQueue = [];
+  if (hasStorage){
+    const res = await safeList(KEY_PREFIX);
+    if (res && res.keys) for (const k of res.keys) await safeDel(k);
+  }
+});
+
+/* QR code */
+let qr = null;
+function makeQR(url){
+  $("qrbox").innerHTML = "";
+  const target = url.includes("#") ? url : url + "#player";
+  qr = new QRCode($("qrbox"), { text: target, width: 150, height: 150, correctLevel: QRCode.CorrectLevel.M });
+}
+$("urlGo").addEventListener("click", ()=>{
+  const v = $("urlInput").value.trim();
+  if (v) makeQR(v);
+});
+$("urlInput").value = location.href.split("#")[0];
+makeQR(location.href.split("#")[0]);
+
+/* polling for kicks */
+async function poll(){
+  if (!hasStorage) return;
+  const res = await safeList(KEY_PREFIX);
+  if (res && res.keys){
+    const fresh = res.keys.filter(k => !processed.has(k)).sort();
+    for (const k of fresh){
+      processed.add(k);
+      const rec = await safeGet(k);
+      if (rec && rec.value){
+        try{
+          const d = JSON.parse(rec.value);
+          if (typeof d.zone === "number" && d.name) queueKick(String(d.name).slice(0,18), Math.min(5, Math.max(0, d.zone)));
+        }catch(e){}
+      }
+    }
+  }
+}
+if (!isPlayer){
+  if (hasStorage){
+    // mark existing kicks as processed so old ones don't replay on load
+    safeList(KEY_PREFIX).then(res => {
+      if (res && res.keys) res.keys.forEach(k => processed.add(k));
+      setInterval(poll, POLL_MS);
+    });
+  } else {
+    $("storageWarn").classList.remove("hidden");
+  }
+}
+
+/* ================= PLAYER LOGIC ================= */
+const miniGoal = $("miniGoal");
+for (let i=0;i<6;i++){
+  const m = document.createElement("div");
+  m.className = "mini-zone"; m.id = "mini"+i;
+  m.textContent = "Z"+(i+1);
+  miniGoal.appendChild(m);
+}
+
+let myName = "";
+$("nameGo").addEventListener("click", ()=>{
+  const v = $("nameInput").value.trim();
+  if (!v){ $("nameInput").focus(); return; }
+  myName = v;
+  $("nameCard").style.display = "none";
+  $("shootArea").style.display = "flex";
+  if (!hasStorage) $("plStorageNote").textContent = "Note: live sync isn't available in this view — kicks may not reach the big screen.";
+});
+$("nameInput").addEventListener("keydown", e => { if (e.key === "Enter") $("nameGo").click(); });
+
+const ball = $("theBall"), pitchPhone = $("pitchPhone");
+let dragStart = null;
+
+function pt(e){ const t = e.touches ? e.touches[0] : e; return {x:t.clientX, y:t.clientY}; }
+
+function aimZone(dx, dy){
+  // column from horizontal direction, row from swipe strength (long swipe = top)
+  const col = dx < -35 ? 0 : dx > 35 ? 2 : 1;
+  const row = Math.abs(dy) > 140 ? 0 : 1;
+  return row*3 + col;
+}
+function highlightAim(z){
+  document.querySelectorAll(".mini-zone").forEach(el=>el.classList.remove("aim"));
+  if (z !== null) $("mini"+z).classList.add("aim");
+}
+
+function onStart(e){ dragStart = pt(e); e.preventDefault(); }
+function onMove(e){
+  if (!dragStart) return;
+  const p = pt(e);
+  const dx = p.x - dragStart.x, dy = p.y - dragStart.y;
+  ball.style.transform = `translateX(calc(-50% + ${dx*0.4}px)) translateY(${Math.min(0,dy)*0.4}px)`;
+  highlightAim(dy < -20 ? aimZone(dx, dy) : null);
+  e.preventDefault();
+}
+async function onEnd(e){
+  if (!dragStart) return;
+  const t = e.changedTouches ? e.changedTouches[0] : e;
+  const dx = t.clientX - dragStart.x, dy = t.clientY - dragStart.y;
+  dragStart = null;
+  ball.style.transform = "translateX(-50%)";
+  highlightAim(null);
+  if (dy > -40) return; // must swipe upward
+  const zone = Math.random() < 0.85 ? aimZone(dx, dy) : Math.floor(Math.random()*6); // a little keeper chaos
+  await shoot(zone);
+  e.preventDefault();
+}
+pitchPhone.addEventListener("touchstart", onStart, {passive:false});
+pitchPhone.addEventListener("touchmove", onMove, {passive:false});
+pitchPhone.addEventListener("touchend", onEnd, {passive:false});
+pitchPhone.addEventListener("mousedown", onStart);
+window.addEventListener("mousemove", onMove);
+window.addEventListener("mouseup", onEnd);
+
+async function shoot(zone){
+  // animate ball flying up on phone
+  ball.style.transition = "transform .5s ease-in, opacity .4s";
+  ball.style.transform = "translateX(-50%) translateY(-45vh) scale(.4) rotate(540deg)";
+  ball.style.opacity = "0";
+
+  if (hasStorage){
+    const key = KEY_PREFIX + Date.now() + "_" + Math.random().toString(36).slice(2,7);
+    await safeSet(key, JSON.stringify({name: myName, zone, ts: Date.now()}));
+  }
+  setTimeout(()=>{
+    $("shootArea").style.display = "none";
+    $("plResult").style.display = "flex";
+    $("plZone").textContent = `GOAL! ZONE ${zone+1} · ${ZONE_NAMES[zone].toUpperCase()}`;
+    $("plQ").textContent = QUESTIONS[zone];
+  }, 550);
+}
+$("plAgain").addEventListener("click", ()=>{
+  $("plResult").style.display = "none";
+  $("shootArea").style.display = "flex";
+  ball.style.transition = "none";
+  ball.style.opacity = "1";
+  ball.style.transform = "translateX(-50%)";
+});
+</script>
+</body>
+</html>
